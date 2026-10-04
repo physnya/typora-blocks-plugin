@@ -23,25 +23,63 @@ window to enable them again. Typora's source mode always retains the `:::` text.
 
 ## Install / remove
 
-Python 3 is required only for installation. From this directory:
+Keep this repository outside `Typora.app`. Python 3 is required for installation
+and automatic repair. From this directory:
 
 ```sh
 python3 install.py /Applications/Typora.app
 python3 install.py /Applications/Typora.app --uninstall
 ```
 
-The installer adds one deferred script to
-`Contents/Resources/TypeMark/index.html`, saving the original as
-`index.html.before-plume-blocks`. Reinstallation is idempotent. Uninstall removes
-only the loader, preserving unrelated HTML changes and the plugin source files.
-Open a new Typora window after installing or removing the plugin. Existing
-windows retain their loaded scripts until closed.
+Installation deploys a copy to
+`~/Library/Application Support/TyporaPlumeBlocks` and registers the user agent
+`~/Library/LaunchAgents/local.typora.plume-blocks.plist`. The agent runs at login,
+watches the app's directory and editor HTML, and checks every 60 seconds while
+logged in. If an official update replaces Typora, it restores the plugin and
+loader from that durable copy. It does not need the development repository to
+remain in place and makes no network requests. Keep the Python interpreter
+installed; reinstall the plugin if its executable path changes.
 
-Keep a copy of this directory **outside Typora.app** for development and updates.
-A Typora application update can replace the bundle and remove the plugin. Run
-the installer from that external copy to reinstall it. Modifying a signed app's
-resources changes its signature validation; this installer does not re-sign
-Typora or change macOS security settings.
+The loader is one deferred script in `Contents/Resources/TypeMark/index.html`.
+Before patching a fresh release, the installer saves that release's HTML as
+`index.html.before-plume-blocks`. Idle checks do not rewrite files. The repair job
+skips an absent app during replacement and rejects an unrecognized editor layout.
+It does not launch or quit Typora. After an update, allow about a minute for repair
+and reopen windows that were opened before the repair completed.
+
+Uninstall stops and removes the agent **before** removing the loader, so repair
+will not reinstall a deliberately disabled plugin. It preserves the repository,
+deployed copy, log, and unrelated HTML changes. Existing windows retain their
+loaded scripts until closed. To re-enable, run the installation command again.
+
+Useful diagnostics:
+
+```sh
+launchctl print gui/$(id -u)/local.typora.plume-blocks
+cat "$HOME/Library/Application Support/TyporaPlumeBlocks/repair.log"
+```
+
+Automatic restoration handles bundle replacement; compatibility with future
+changes to Typora's internal editor still may require a plugin update. Modifying
+a signed app's resources changes signature validation; this installer does not
+re-sign Typora or change macOS security settings.
+
+## Version control and development
+
+The development repository on this Mac is
+`/Users/physnya/github/typora-plume-blocks`. Git tracks source, installer,
+documentation, and tests. `v0.1.0` preserves the working plugin with the caret and
+scroll fixes; `v0.2.0` adds automatic repair. No remote is configured.
+
+After editing, run the checks below, update `VERSION`, and commit/tag the release.
+Run `python3 install.py` to deploy that checkout. The agent uses the last deployed
+copy, so uncommitted development edits do not affect Typora. To redeploy the
+previous persistent release without switching your working tree:
+
+```sh
+git archive v0.2.0 | tar -x -C /path/to/empty-release-directory
+python3 /path/to/empty-release-directory/install.py
+```
 
 ## Implementation
 
@@ -106,6 +144,20 @@ in repeated/formatted text, viewport position, unchanged neighboring previews,
 folding state, typing and leaving a block, nested text, and cleanup. All checks
 passed. A native Typora test also clicked inside `TARGET`, inserted `X` to get
 `TARXGET`, and verified the saved Markdown still contained `**TARXGET**`.
+
+Installer regression tests cover full bundle replacement, in-place updates,
+restoring a missing or modified plugin, idempotence, unknown layouts, uninstall,
+and the repair agent configuration:
+
+```sh
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+All eight installer tests pass. On this Mac, removing the installed script and
+loader triggered the live LaunchAgent to restore both automatically in 0.5
+seconds. A real uninstall also removed the loader and unloaded the job; automatic
+repair was then re-enabled. Full official-update replacement was simulated with
+temporary bundles, without replacing the user's installed Typora release.
 
 JavaScript syntax and installer round-trip checks also passed. Native Typora
 1.14.10 loaded the final hook and displayed all nine types, a list, and a nested
