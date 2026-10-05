@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- Simplify colored blocks with borderless, softer backgrounds and balanced padding.
+- Remove the left accent line and use smaller, lighter-weight titles.
+- Make the edit button blend into the block until hovered or keyboard-focused.
+
 ## 0.2.0
 
 - Keep development source in an external Git repository.

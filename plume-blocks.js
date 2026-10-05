@@ -2,27 +2,26 @@
 (() => {
   "use strict";
   const css = `.plume-container {
-  --plume-accent: #636b77;
-  --plume-bg: rgba(142, 150, 170, .12);
+  --plume-accent: #606b7a;
+  --plume-bg: rgba(142, 150, 170, .08);
   margin: 1em 0;
-  padding: 14px 20px;
-  border: 1px solid transparent;
-  border-left: 4px solid var(--plume-accent);
+  padding: 16px 18px;
+  border: 0;
   border-radius: 8px;
   background: var(--plume-bg);
   color: inherit;
   overflow-wrap: anywhere;
   text-align: left;
 }
-.plume-info { --plume-accent: #3984d5; --plume-bg: rgba(57, 132, 213, .12); }
-.plume-tip { --plume-accent: #299764; --plume-bg: rgba(41, 151, 100, .12); }
-.plume-warning { --plume-accent: #b47b12; --plume-bg: rgba(218, 162, 35, .14); }
-.plume-caution { --plume-accent: #db4757; --plume-bg: rgba(219, 71, 87, .12); }
+.plume-info { --plume-accent: #356da6; --plume-bg: rgba(57, 132, 213, .08); }
+.plume-tip { --plume-accent: #327b57; --plume-bg: rgba(41, 151, 100, .08); }
+.plume-warning { --plume-accent: #926a20; --plume-bg: rgba(218, 162, 35, .10); }
+.plume-caution { --plume-accent: #b34d59; --plume-bg: rgba(219, 71, 87, .08); }
 .plume-container > .plume-title {
-  margin: 0 0 .6em;
+  margin: 0 0 .4em;
   padding: 0;
-  font-size: 1em;
-  font-weight: 650;
+  font-size: .95em;
+  font-weight: 600;
   line-height: 1.5;
   color: var(--plume-accent);
 }
@@ -61,11 +60,12 @@
 .plume-preview .plume-edit {
   position: absolute; right: 8px; top: 5px;
   border: 0; border-radius: 4px; padding: 2px 7px;
-  background: var(--bg-color, #fff); color: inherit;
+  background: transparent; color: inherit;
   font: 11px/1.5 -apple-system, sans-serif;
   cursor: pointer; opacity: 0;
 }
-.plume-preview:hover .plume-edit, .plume-preview:focus-within .plume-edit { opacity: .8; }
+.plume-preview:hover .plume-edit, .plume-preview:focus-within .plume-edit { opacity: .6; }
+.plume-preview .plume-edit:hover, .plume-preview .plume-edit:focus-visible { opacity: 1; background: rgba(128, 128, 128, .1); }
 @media (prefers-color-scheme: dark) {
   .plume-container { --plume-accent: #a3adbd; }
   .plume-info { --plume-accent: #73b4ff; }
