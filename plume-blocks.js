@@ -33,6 +33,31 @@
 .plume-center, .plume-center > p { text-align: center; }
 .plume-right, .plume-right > p { text-align: right; }
 .plume-align pre, .plume-align code { text-align: left; }
+.plume-window {
+  margin: 1em 0; border: 1px solid rgba(128, 128, 128, .22);
+  border-radius: 8px; overflow: hidden; color: inherit; text-align: left;
+}
+.plume-window-header {
+  display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px;
+  align-items: center; gap: 8px; min-height: 36px; padding: 0 12px;
+  background: rgba(128, 128, 128, .08); border-bottom: 1px solid rgba(128, 128, 128, .16);
+}
+.plume-window-dots { display: flex; gap: 5px; }
+.plume-window-dots i { width: 9px; height: 9px; border-radius: 50%; background: #df7772; }
+.plume-window-dots i:nth-child(2) { background: #dfb45e; }
+.plume-window-dots i:nth-child(3) { background: #72b68b; }
+.plume-window-title {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-align: center; font-size: .85em; font-weight: 500; opacity: .8;
+}
+.plume-window-content {
+  box-sizing: border-box; height: var(--plume-window-height, auto);
+  padding: 16px var(--plume-window-gap, 20px); overflow: auto; overflow-wrap: anywhere;
+}
+.plume-window-content > :first-child { margin-top: 0; }
+.plume-window-content > :last-child { margin-bottom: 0; }
+.plume-window-image { padding-top: 0; padding-bottom: 0; }
+.plume-window-image img { display: block; max-width: 100%; height: auto; margin: 0; }
 #write > .plume-source { display: none !important; }
 #write > .plume-anchor {
   display: block !important;
@@ -76,6 +101,7 @@
 @media print {
   .plume-container { break-inside: avoid; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .plume-edit { display: none; }
+  .plume-window-content { height: auto; overflow: visible; }
 }
 `;
   const stylesheet = document.createElement("style");
@@ -84,8 +110,31 @@
   document.head.append(stylesheet);
   const titles = { note: "Note", info: "Info", tip: "Tip", warning: "Warning", caution: "Caution", details: "Details" };
   const alignments = new Set(["left", "center", "right"]);
-  const supported = type => Object.hasOwn(titles, type) || alignments.has(type);
+  const supported = token => Object.hasOwn(titles, token.type) || alignments.has(token.type) ||
+    (token.type === "window" && token.options !== null);
   const origins = new WeakMap();
+
+  function windowOptions(info = "") {
+    const options = {};
+    const pattern = /\s*(title|height|gap)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"']+))(?:\s+|$)/gy;
+    let end = 0;
+    let match;
+    while ((match = pattern.exec(info))) {
+      const [, name, double, single, bare] = match;
+      const value = double ?? single ?? bare;
+      if (name === "title") {
+        options.title = value;
+        const assignment = match[0].trimEnd();
+        options.titleOffset = match.index + assignment.length - value.length - (bare === undefined ? 1 : 0);
+      } else {
+        const length = /^\d+(?:\.\d+)?$/.test(value) ? `${value}px` : value;
+        if (!CSS.supports(name === "height" ? "height" : "padding-left", length)) return null;
+        options[name] = length;
+      }
+      end = pattern.lastIndex;
+    }
+    return end === info.length ? options : null;
+  }
 
   function copyWithOrigins(node) {
     const clone = node.cloneNode(true);
@@ -134,12 +183,12 @@
   }
 
 
-  function pointAt(root, offset) {
+  function pointAt(root, offset, before = false) {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     let node;
     let last;
     while ((node = walker.nextNode())) {
-      if (offset < node.length) return [node, offset];
+      if (offset < node.length || (before && offset === node.length)) return [node, offset];
       offset -= node.length;
       last = node;
     }
@@ -149,7 +198,8 @@
   function sliceParagraph(paragraph, start, end) {
     const result = paragraph.cloneNode(false);
     const range = document.createRange();
-    range.setStart(...pointAt(paragraph, start));
+    // Include images between text nodes at the same character offset.
+    range.setStart(...pointAt(paragraph, start, true));
     range.setEnd(...pointAt(paragraph, end));
     result.append(range.cloneContents());
     const walker = document.createTreeWalker(result, NodeFilter.SHOW_TEXT);
@@ -193,22 +243,65 @@
       for (const match of text.matchAll(pattern)) {
         const [node] = pointAt(clone, match.index + match[0].indexOf(":"));
         if (node.parentElement?.closest("code, [md-inline='code'], [md-inline='escape']")) continue;
+        const title = match[3]?.trim();
         markers.push({ start: match.index, end: match.index + match[0].length,
-          length: match[1].length, type: match[2], title: match[3]?.trim() });
+          length: match[1].length, type: match[2], title,
+          options: match[2] === "window" ? windowOptions(title) : undefined });
+      }
+      if (!markers.length) {
+        tokens.push({ element: clone, block });
+        return;
       }
       let offset = 0;
       for (const marker of markers) {
         const end = marker.start > offset && text[marker.start - 1] === "\n" ? marker.start - 1 : marker.start;
-        if (end > offset) tokens.push({ element: sliceParagraph(clone, offset, end), block });
+        if (end >= offset) {
+          const element = sliceParagraph(clone, offset, end);
+          if (element.hasChildNodes()) tokens.push({ element, block });
+        }
         tokens.push({ ...marker, element: sliceParagraph(clone, marker.start, marker.end), block });
         offset = marker.end + (text[marker.end] === "\n" ? 1 : 0);
       }
-      if (offset < text.length || !markers.length) tokens.push({ element: sliceParagraph(clone, offset, text.length), block });
+      if (offset < text.length) tokens.push({ element: sliceParagraph(clone, offset, text.length), block });
     });
     return tokens;
   }
 
   function container(token, body) {
+    if (token.type === "window") {
+      const el = document.createElement("article");
+      el.className = "plume-window";
+      const header = document.createElement("header");
+      header.className = "plume-window-header";
+      const dots = document.createElement("span");
+      dots.className = "plume-window-dots";
+      dots.setAttribute("aria-hidden", "true");
+      dots.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
+      header.append(dots);
+      if (token.options.title) {
+        const title = document.createElement("span");
+        title.className = "plume-window-title";
+        title.textContent = token.options.title;
+        const offset = token.element.textContent.indexOf(token.title) + token.options.titleOffset;
+        const origin = originAt(...pointAt(token.element, offset));
+        if (origin) origins.set(title.firstChild, origin);
+        header.append(title);
+      }
+      const content = document.createElement("section");
+      content.className = "plume-window-content";
+      const onlyImage = body.childElementCount === 1 && !body.textContent.trim() &&
+        (body.firstElementChild.matches("img, picture") ||
+          (body.firstElementChild.matches("p") && body.querySelectorAll("img").length === 1));
+      content.classList.toggle("plume-window-image", onlyImage);
+      content.style.setProperty("--plume-window-gap", token.options.gap ?? (onlyImage ? "0px" : "20px"));
+      if (token.options.height) content.style.setProperty("--plume-window-height", token.options.height);
+      if (onlyImage) {
+        const image = body.querySelector("picture") || body.querySelector("img");
+        content.append(image.closest("a") || image);
+      } else content.append(body);
+      el.append(header, content);
+      return el;
+    }
     const aligned = alignments.has(token.type);
     const el = document.createElement(token.type === "details" ? "details" : "div");
     el.className = aligned ? `plume-align plume-${token.type}` : `plume-container plume-${token.type}`;
@@ -238,7 +331,7 @@
       else if (stack.length && token.length >= tokens[stack.at(-1)].length) {
         const start = stack.pop();
         // Unknown container types keep their complete contents literal.
-        if (supported(tokens[start].type) && stack.every(i => supported(tokens[i].type))) {
+        if (supported(tokens[start]) && stack.every(i => supported(tokens[i]))) {
           pairs.set(start, index);
           intervals.push([tokens[start].block, token.block]);
         }
@@ -392,6 +485,12 @@
       preview.className = "plume-preview";
       preview.addEventListener("mousedown", event => {
         if (event.button !== 0 || event.target.closest("summary, a")) return;
+        if (event.target.matches(".plume-window-content")) {
+          const content = event.target;
+          const rect = content.getBoundingClientRect();
+          if (event.clientX >= rect.left + content.clientLeft + content.clientWidth ||
+              event.clientY >= rect.top + content.clientTop + content.clientHeight) return;
+        }
         event.preventDefault();
         event.stopPropagation();
         editGesture = true;
@@ -514,7 +613,7 @@
       groups.forEach(group => group.sources.forEach(clearSource));
       if (positionedHost) host.classList.remove("plume-host");
       layer.remove();
-      if (exporter?.exportToHTML === wrappedExport) exporter.exportToHTML = originalExport;
+      if (wrappedExport && exporter.exportToHTML === wrappedExport) exporter.exportToHTML = originalExport;
       window.PlumeBlocks.running = false;
     }
     Object.assign(window.PlumeBlocks, { running: true, refresh, stop });

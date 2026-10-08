@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- Add Plume-style `window` containers with a minimal title bar and window dots.
+- Support `title`, `height`, and `gap`, nested containers, and edge-to-edge images.
+- Preserve click-to-edit after scrolling within fixed-height windows.
+- Include window styling in HTML exports and expand scrollable content for print.
+- Preserve image-only paragraphs when parsing containers and fix standalone cleanup.
+- See [WINDOW.md](WINDOW.md) for syntax, examples, and verification commands.
+
 ## 0.2.1
 
 - Simplify colored blocks with borderless, softer backgrounds and balanced padding.

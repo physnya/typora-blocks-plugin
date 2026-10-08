@@ -13,8 +13,8 @@ const { webkit } = require('playwright');
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(pathToFileURL(path.join(__dirname, 'browser.html')).href);
     await page.waitForFunction(() => /passed/.test(document.querySelector('#result').textContent));
-    assert.equal(await page.locator('#result').textContent(), '21 passed, 0 failed');
-    console.log('PASS: 21 existing WebKit tests');
+    assert.equal(await page.locator('#result').textContent(), '28 passed, 0 failed');
+    console.log('PASS: 28 WebKit parser, preview and export tests');
 
     await page.setContent(`<style>
       body { margin: 0; font: 18px/1.6 sans-serif; }

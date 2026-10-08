@@ -12,7 +12,7 @@ addEventListener("DOMContentLoaded", async () => {
   }
   function render(html) { root.innerHTML = html; PlumeBlocks.transform(root); return root; }
   const tick = () => new Promise(resolve => setTimeout(resolve, 100));
-  for (const type of ["note", "info", "tip", "warning", "caution", "details", "left", "center", "right"]) {
+  for (const type of ["note", "info", "tip", "warning", "caution", "details", "left", "center", "right", "window"]) {
     await test(`${type}: no blank lines required`, () => {
       render(`<p>::: ${type}\nBody <strong>bold</strong>\n:::</p>`);
       assert(root.querySelector(`.plume-${type}`));
@@ -20,6 +20,58 @@ addEventListener("DOMContentLoaded", async () => {
       assert(!root.textContent.includes(":::"));
     });
   }
+  await test("window title, height and horizontal gap", () => {
+    render('<p>::: window title="Example window" height="200px" gap="24"\nBody\n:::</p>');
+    assert(root.querySelector(".plume-window-title").textContent === "Example window");
+    const content = root.querySelector(".plume-window-content");
+    assert(content.style.getPropertyValue("--plume-window-height") === "200px");
+    assert(content.style.getPropertyValue("--plume-window-gap") === "24px");
+    render("<p>::: window gap='1.5rem' height=120 title='中文标题'\nBody\n:::</p>");
+    assert(root.querySelector(".plume-window-title").textContent === "中文标题");
+    assert(root.querySelector(".plume-window-content").style.getPropertyValue("--plume-window-height") === "120px");
+  });
+  await test("image-only windows default to edge-to-edge content", () => {
+    for (const image of ['<p><img alt="Hero"></p>', '<picture><source><img alt="Hero"></picture>']) {
+      render(`<p>::: window</p>${image}<p>:::</p>`);
+      assert(root.querySelector(".plume-window-image img"));
+      assert(root.querySelector(".plume-window-content").style.getPropertyValue("--plume-window-gap") === "0px");
+    }
+    render('<p>::: window gap="12px"</p><p><img alt="Hero"></p><p>:::</p>');
+    assert(root.querySelector(".plume-window-content").style.getPropertyValue("--plume-window-gap") === "12px");
+    render('<p>::: window\n<span class="md-image"><img alt="Inline hero"></span>\n:::</p>');
+    assert(root.querySelector('.plume-window-image > img')?.alt === 'Inline hero', "Image between soft-break delimiters was dropped");
+    render('<p>::: window</p><p><a href="https://example.com"><img alt="Linked image"></a></p><p>:::</p>');
+    assert(root.querySelector('.plume-window-image > a > img'), "Image link was lost");
+  });
+  await test("window titles cannot inject markup or CSS", () => {
+    render('<p>::: window title="&lt;img src=x onerror=alert(1)&gt;"\nBody\n:::</p>');
+    assert(root.querySelector(".plume-window-title").textContent === '<img src=x onerror=alert(1)>');
+    assert(!root.querySelector("img"));
+    render('<p>::: window height="20px; color:red"\nBody\n:::</p>');
+    assert(!root.querySelector(".plume-window"));
+  });
+  await test("incomplete or invalid window options stay literal", () => {
+    for (const info of ['title="unfinished', 'height="nonsense"', 'gap="-10px"', 'unsupported=true']) {
+      render(`<p>::: window ${info}\nBody\n:::</p>`);
+      assert(!root.querySelector(".plume-window"));
+      assert(root.textContent.includes("::: window"));
+    }
+    render('<p>::: window title="Open"\nBody</p>');
+    assert(!root.querySelector(".plume-window"));
+  });
+  await test("windows nest with existing containers", () => {
+    render('<p>:::: window title="Nested"\n::: tip A tip\nInner\n:::\n::::</p>');
+    assert(root.querySelector(".plume-window-content .plume-tip")?.textContent.includes("Inner"));
+    render('<p>:::: tip Outer\n::: window\nInner\n:::\n::::</p>');
+    assert(root.querySelector(".plume-tip .plume-window"));
+  });
+  await test("window content preserves rendered HTML, tables and literal code", () => {
+    render('<p>::: window</p><h3>Heading</h3><div class="example">Rendered HTML</div><table><tr><td>Cell</td></tr></table><pre><code>::: window\nLiteral\n:::</code></pre><p>:::</p>');
+    assert(root.querySelector(".plume-window-content .example").textContent === "Rendered HTML");
+    assert(root.querySelector(".plume-window-content td").textContent === "Cell");
+    assert(root.querySelectorAll(".plume-window").length === 1);
+    assert(root.querySelector(".plume-window-content code").textContent.includes("::: window"));
+  });
   await test("custom title is text, never injected HTML", () => {
     render('<p>::: warning &lt;img src=x onerror=alert(1)&gt;\nBody\n:::</p>');
     assert(root.querySelector(".plume-title").textContent === '<img src=x onerror=alert(1)>');
@@ -84,7 +136,7 @@ addEventListener("DOMContentLoaded", async () => {
     document.body.append(write);
     const originalText = write.textContent;
     const originalNodes = [...write.childNodes];
-    window.File = { editor: { export: { exportToHTML: async () => '<html><head></head><body><div id="write"><p>::: tip\nExported\n:::</p></div></body></html>' } } };
+    window.File = { editor: { export: { exportToHTML: async () => '<html><head></head><body><div id="write"><p>::: tip\nExported\n:::</p><p>::: window title="Exported window" height="120px"\nWindow body\n:::</p></div></body></html>' } } };
     const exportFn = File.editor.export.exportToHTML;
     PlumeBlocks.start();
     await tick();
@@ -106,6 +158,9 @@ addEventListener("DOMContentLoaded", async () => {
     assert(exported.includes('class="plume-container plume-tip"'));
     assert(!exported.includes("::: tip"));
     assert(exported.includes("--plume-accent"));
+    assert(exported.includes('class="plume-window"'));
+    assert(exported.includes("Exported window"));
+    assert(exported.includes("--plume-window-height: 120px"));
     PlumeBlocks.stop();
     assert(!document.getElementById("plume-layer"));
     assert(!write.querySelector(".plume-source"));
