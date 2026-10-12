@@ -217,19 +217,27 @@
     const tokens = [];
     [...root.children].forEach((source, block) => {
       const clone = cloneBlock(source, live);
-      // Typora's ordinary Markdown parser treats an unindented closing fence
-      // immediately after a list as a lazy continuation of the last list item.
-      if (source.matches("ul, ol")) {
-        const match = /\n {0,3}(:{3,})[ \t]*$/.exec(clone.textContent);
-        if (match) {
+      // Markdown can absorb closing fences into the last paragraph of a list
+      // or blockquote. Split those trailing lines back into container tokens.
+      if (source.matches("ul, ol, blockquote")) {
+        const match = /\n((?: {0,3}:{3,}[ \t]*(?:\n|$))+)[ \t\n]*$/.exec(clone.textContent);
+        const closings = match ? [...match[1].matchAll(/^ {0,3}(:{3,})[ \t]*$/gm)] : [];
+        const plain = closings.every(marker => {
+          const [node] = pointAt(clone, match.index + 1 + marker.index + marker[0].indexOf(":"));
+          return node.parentElement?.closest("p, li") &&
+            !node.parentElement.closest("pre, code, [md-inline='code'], [md-inline='escape']");
+        });
+        if (closings.length && plain) {
           const range = document.createRange();
           range.setStart(...pointAt(clone, match.index));
           range.setEnd(clone, clone.childNodes.length);
           range.deleteContents();
           tokens.push({ element: clone, block });
-          const marker = document.createElement("p");
-          marker.textContent = match[1];
-          tokens.push({ element: marker, block, length: match[1].length });
+          for (const closing of closings) {
+            const marker = document.createElement("p");
+            marker.textContent = closing[1];
+            tokens.push({ element: marker, block, length: closing[1].length });
+          }
           return;
         }
       }

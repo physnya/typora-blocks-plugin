@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1
+
+- Fix blockquotes inside Tip and other containers when Markdown absorbs the
+  closing `:::` into the quote. A blank line before the fence is no longer needed.
+- Recognize consecutive closing fences after quotes and lists in nested containers.
+- Keep fence-like text inside quoted code and escaped spans literal.
+- Verify quote rendering, HTML export, source preservation, and click-to-edit.
+
 ## 0.3.0
 
 - Add Plume-style `window` containers with a minimal title bar and window dots.

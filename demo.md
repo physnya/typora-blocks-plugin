@@ -16,6 +16,8 @@ Use a custom title after the container type.
 
 - Lists remain Markdown.
 - Links and emphasis remain editable.
+
+> A **blockquote** works inside a tip, including without a blank line before the closing fence.
 :::
 
 ::: warning 注意

@@ -13,8 +13,8 @@ const { webkit } = require('playwright');
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(pathToFileURL(path.join(__dirname, 'browser.html')).href);
     await page.waitForFunction(() => /passed/.test(document.querySelector('#result').textContent));
-    assert.equal(await page.locator('#result').textContent(), '28 passed, 0 failed');
-    console.log('PASS: 28 WebKit parser, preview and export tests');
+    assert.equal(await page.locator('#result').textContent(), '31 passed, 0 failed');
+    console.log('PASS: 31 WebKit parser, preview and export tests');
 
     await page.setContent(`<style>
       body { margin: 0; font: 18px/1.6 sans-serif; }
@@ -26,8 +26,7 @@ const { webkit } = require('playwright');
     </style><content><div id="write" contenteditable="true">
       <div class="spacer">Before</div>
       <p>::: tip Custom title</p>
-      <p id="body">Repeated text. <strong><span class="md-meta">**</span>Repeated text.<span class="md-meta">**</span></strong><span class="md-softbreak">\n</span>Last line.</p>
-      <p>:::</p>
+      <blockquote><p id="body">Repeated text. <strong><span class="md-meta">**</span>Repeated text.<span class="md-meta">**</span></strong><span class="md-softbreak">\n</span>Last line.<span class="md-softbreak">\n</span>:::</p></blockquote>
       <p id="outside">Outside the container.</p>
       <p>::: details Keep open\nOther content\n:::</p>
       <p>:::: tip Outer\n::: center\nNested <em><span class="md-meta">*</span>target text<span class="md-meta">*</span></em>\n:::\n::::</p>
@@ -36,6 +35,8 @@ const { webkit } = require('playwright');
     await page.addScriptTag({ path: path.join(__dirname, '..', 'plume-blocks.js') });
     await page.waitForTimeout(150);
     assert.equal(await page.locator('.plume-preview').count(), 3);
+    assert.equal(await page.locator('.plume-tip blockquote').count(), 1);
+    assert(!(await page.locator('.plume-tip blockquote').textContent()).includes(':::'));
 
     const scrolling = await page.evaluate(() => {
       const host = document.querySelector('content');
@@ -97,7 +98,7 @@ const { webkit } = require('playwright');
     assert(Math.abs(selected.top - clicked.top) < 2, JSON.stringify({ selected, clicked }));
     assert(selected.samePreview && selected.sameDetails && selected.open);
     assert.equal(selected.removals, 0, 'Click-to-edit must not rebuild previews');
-    console.log('PASS: real mouse click preserves exact text offset and viewport position');
+    console.log('PASS: real blockquote click preserves exact text offset and viewport position');
     console.log('PASS: other previews and open details are untouched');
 
     await page.keyboard.insertText('X');

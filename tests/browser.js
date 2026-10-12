@@ -93,6 +93,33 @@ addEventListener("DOMContentLoaded", async () => {
     assert(root.querySelector(".plume-tip li:last-child").textContent === "Last");
     assert(root.querySelector(".plume-warning").textContent.includes("Next"));
   });
+  await test("blockquotes render in every container with or without a blank closing line", () => {
+    for (const type of ["note", "info", "tip", "warning", "caution", "details", "left", "center", "right", "window"]) {
+      for (const ending of ['\n:::</p></blockquote>', '</p></blockquote><p>:::</p>']) {
+        render(`<p>::: ${type}</p><blockquote><p>Quoted <strong>text</strong>${ending}`);
+        assert(root.querySelector(`.plume-${type} blockquote strong`)?.textContent === "text", type);
+        assert(!root.textContent.includes(":::"), "Closing fence remained in the quote");
+      }
+    }
+  });
+  await test("nested blockquotes and soft-break closing fences preserve the editable source", () => {
+    root.innerHTML = '<p>::: tip</p><blockquote><p>Outer quote</p><blockquote><p>Inner <em>quote</em><span class="md-softbreak">\n</span>:::</p></blockquote></blockquote>';
+    const original = root.innerHTML;
+    const groups = PlumeBlocks.plan(root, true);
+    assert(groups.length === 1);
+    assert(groups[0].content.querySelector('.plume-tip blockquote blockquote em')?.textContent === 'quote');
+    assert(!groups[0].content.textContent.includes(':::'));
+    assert(root.innerHTML === original, "Source DOM changed");
+    render('<p>:::: tip\n::: window</p><blockquote><p>Nested quote\n:::\n::::</p></blockquote>');
+    assert(root.querySelector('.plume-tip .plume-window blockquote')?.textContent === 'Nested quote');
+    assert(!root.textContent.includes(':::'));
+  });
+  await test("quoted code ending in a fence stays literal", () => {
+    for (const body of ['<pre><code>Literal\n:::</code></pre>', '<p>Literal <code>code\n:::</code></p>', '<p>Literal <span md-inline="escape">\n:::</span></p>']) {
+      render(`<p>::: tip</p><blockquote>${body}</blockquote><p>:::</p>`);
+      assert(root.querySelector('.plume-tip blockquote')?.textContent.includes(':::'));
+    }
+  });
   await test("shorter closing fence cannot close outer container", () => {
     render('<p>:::: tip Outer\nBody\n:::\n::::</p>');
     assert(root.querySelector(".plume-tip")?.textContent.includes(":::"));
@@ -136,7 +163,7 @@ addEventListener("DOMContentLoaded", async () => {
     document.body.append(write);
     const originalText = write.textContent;
     const originalNodes = [...write.childNodes];
-    window.File = { editor: { export: { exportToHTML: async () => '<html><head></head><body><div id="write"><p>::: tip\nExported\n:::</p><p>::: window title="Exported window" height="120px"\nWindow body\n:::</p></div></body></html>' } } };
+    window.File = { editor: { export: { exportToHTML: async () => '<html><head></head><body><div id="write"><p>::: tip</p><blockquote><p>Exported\n:::</p></blockquote><p>::: window title="Exported window" height="120px"\nWindow body\n:::</p></div></body></html>' } } };
     const exportFn = File.editor.export.exportToHTML;
     PlumeBlocks.start();
     await tick();
@@ -157,6 +184,7 @@ addEventListener("DOMContentLoaded", async () => {
     const exported = await File.editor.export.exportToHTML();
     assert(exported.includes('class="plume-container plume-tip"'));
     assert(!exported.includes("::: tip"));
+    assert(new DOMParser().parseFromString(exported, 'text/html').querySelector('.plume-tip blockquote')?.textContent === 'Exported');
     assert(exported.includes("--plume-accent"));
     assert(exported.includes('class="plume-window"'));
     assert(exported.includes("Exported window"));
