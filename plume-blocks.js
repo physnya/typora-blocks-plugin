@@ -138,11 +138,15 @@
 
   function copyWithOrigins(node) {
     const clone = node.cloneNode(true);
-    const source = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
-    const target = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT);
-    let text;
-    while ((text = source.nextNode())) {
-      origins.set(target.nextNode(), origins.get(text) || { node: text, offset: 0 });
+    origins.set(clone, origins.get(node) || { node });
+    const source = document.createTreeWalker(node, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    const target = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    let child;
+    while ((child = source.nextNode())) {
+      const copy = target.nextNode();
+      if (child.nodeType === Node.TEXT_NODE || child.nodeName === "BLOCKQUOTE") {
+        origins.set(copy, origins.get(child) || { node: child, offset: 0 });
+      }
     }
     return clone;
   }
@@ -427,6 +431,14 @@
       for (const prop of ["fontFamily", "fontSize", "lineHeight", "color"]) layer.style[prop] = style[prop];
       for (const group of groups) {
         if (group.preview.hidden) continue;
+        // Preview quotes live outside #write, so editor-scoped theme rules no
+        // longer match. Preserve their appearance from the original elements.
+        for (const quote of group.preview.querySelectorAll("blockquote")) {
+          const style = getComputedStyle(origins.get(quote).node);
+          for (const prop of ["margin", "padding", "borderTop", "borderRight", "borderBottom", "borderLeft",
+            "borderRadius", "background", "color", "fontFamily", "fontSize", "fontWeight", "fontStyle",
+            "lineHeight", "textAlign", "boxShadow"]) quote.style[prop] = style[prop];
+        }
         const source = group.sources[0];
         group.preview.style.width = `${source.getBoundingClientRect().width}px`;
         source.style.setProperty("--plume-height", `${group.preview.getBoundingClientRect().height}px`);
@@ -587,6 +599,11 @@
     on(write, "load", scheduleLayout, true);
     const themeObserver = new MutationObserver(scheduleLayout);
     themeObserver.observe(document.body, { attributes: true, attributeFilter: ["class", "style"] });
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] });
+    themeObserver.observe(document.head, { childList: true, subtree: true, characterData: true,
+      attributes: true, attributeFilter: ["href", "media", "disabled"] });
+    on(document.head, "load", scheduleLayout, true);
+    on(matchMedia("(prefers-color-scheme: dark)"), "change", scheduleLayout);
     on(document, "keydown", event => {
       if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "b") {
         event.preventDefault();

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.2
+
+- Fix blockquotes appearing as plain paragraphs inside container previews when
+  the theme scopes its styling to `#write`, including Crimson Paper.
+- Preserve the original quote's background, text, padding, borders, and typography.
+- Refresh quote styling after theme changes without rebuilding preview nodes.
+- Add a visual-style regression using the reported Chinese Markdown example,
+  nested quotes, theme changes, and exact click-to-edit source mapping.
+- Verified the exact example in native Typora with Crimson Paper. Run the
+  regression with `node tests/blockquote-style.cjs` (Playwright + WebKit).
+
 ## 0.3.1
 
 - Fix blockquotes inside Tip and other containers when Markdown absorbs the
